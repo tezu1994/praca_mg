@@ -68,10 +68,10 @@ scalers = [
     MinMaxScaler()
 ]
 
-results = [["curr_feature_selection", "curr_parameters", "max_attributes", "curr_attributes", "clf_name", "scl_name",
-            "curr_time_fs", "curr_time_clas", "curr_time_total", "accuracy", "macro_recall_score", "macro_precision_score",
-            "kappa_score",
-            "top5", "top10"]]
+csv_header = [["curr_feature_selection", "curr_parameters", "max_attributes", "curr_attributes", "clf_name", "scl_name",
+               "curr_time_fs", "curr_time_clas", "curr_time_total", "accuracy", "macro_recall_score", "macro_precision_score",
+               "kappa_score",
+               "top5", "top10"]]
 curr_feature_selection = ""
 curr_parameters = ""
 curr_dataset = ""
@@ -133,7 +133,7 @@ def cross_validation(X, Y):
 
 
 def provide_metrics_and_results(Y, predicted, predicted_probs, clf_name, scl_name):
-    global results, curr_feature_selection, max_attributes, curr_attributes, curr_time_fs, curr_time_clas, curr_time_total
+    global results, curr_feature_selection, max_attributes, curr_attributes, curr_time_fs, curr_time_clas, curr_time_total, curr_parameters
     precision = precision_score(Y, predicted, average='macro')
     recall = recall_score(Y, predicted, average='macro')
     accuracy = accuracy_score(Y, predicted)
@@ -142,53 +142,64 @@ def provide_metrics_and_results(Y, predicted, predicted_probs, clf_name, scl_nam
     top10 = top_n_accuracy(Y, predicted_probs, 10)
 
     curr_time_total = curr_time_clas + curr_time_fs
-    results.append(
-        [curr_feature_selection, curr_parameters, max_attributes, curr_attributes, clf_name, scl_name,
-         curr_time_fs, curr_time_clas, curr_time_total, accuracy, recall, precision, kappa_score,
-         top5, top10])
+    write_to_csv([curr_feature_selection, curr_parameters, max_attributes, curr_attributes, clf_name, scl_name,
+                  curr_time_fs, curr_time_clas, curr_time_total, accuracy, recall, precision, kappa_score,
+                  top5, top10])
 
 
 def select_and_predict(selection_function_name, X, Y, selection_function=None):
     global curr_feature_selection, curr_time_fs, curr_attributes, curr_parameters
-    curr_feature_selection = selection_function_name
-    for num_fea in xrange(30, 130, 30):
-        print('Started feature selection: ' + curr_feature_selection + ", number of features: " + str(num_fea))
-        start1 = time.time()
-        if selection_function_name == "Low variance":
-            X_after_selection = selection_function(X, num_fea / 130)
-            curr_parameters = "threshold 0.5"
-        elif selection_function_name == "Randomized Logistic Regression":
-            randomized_logistic = RandomizedLogisticRegression(n_jobs=-1, n_resampling=10, sample_fraction=0.5)
-            X_after_selection = randomized_logistic.fit(X, Y)
-            curr_parameters = "n_resampling 10, sample_fraction 0.5"
-        elif selection_function_name == "CFS":
-            idx = selection_function(X, Y)
-            X_after_selection = X[:, idx[0:num_fea]]
-        elif selection_function_name == "Trace ratio":
-            idx = selection_function(X, Y, num_fea, style='fisher')
-            X_after_selection = X[:, idx[0:num_fea]]
-        elif selection_function_name in ["Decision tree forward", "Decision tree backward", "SVM forward",
-                                         "SVM tree backward"]:
-            idx = selection_function(X, Y, num_fea)
-            X_after_selection = X[:, idx]
-        elif selection_function_name == "Alpha investing":
-            idx = selection_function(X, Y, 0.05, 0.05)
-            X_after_selection = X[:, idx]
-        elif selection_function_name in ["CIFE", "CMIM", "DISR", "FCBF", "ICAP", "JMI", "LCSI", "MIFS", "MIM",
-                                         "MRMR"]:
-            idx = selection_function(X, Y, n_selected_features=num_fea)
-            X_after_selection = X[:, idx[0:num_fea]]
-        else:
-            X_after_selection = select_features(selection_function, X, Y, num_fea)
+    try:
+        curr_feature_selection = selection_function_name
+        for num_fea in xrange(30, 130, 30):
+            print('Started feature selection: ' + curr_feature_selection + ", number of features: " + str(num_fea))
+            start1 = time.time()
+            if selection_function_name == "Low variance":
+                X_after_selection = selection_function(X, num_fea / 130)
+                curr_parameters = "threshold 0.5"
+            elif selection_function_name == "Randomized Logistic Regression":
+                randomized_logistic = RandomizedLogisticRegression(n_jobs=-1, n_resampling=10, sample_fraction=0.5)
+                X_after_selection = randomized_logistic.fit(X, Y)
+                curr_parameters = "n_resampling 10, sample_fraction 0.5"
+            elif selection_function_name == "CFS":
+                idx = selection_function(X, Y)
+                X_after_selection = X[:, idx[0:num_fea]]
+            elif selection_function_name == "Trace ratio":
+                idx = selection_function(X, Y, num_fea, style='fisher')
+                X_after_selection = X[:, idx[0:num_fea]]
+            elif selection_function_name in ["Decision tree forward", "Decision tree backward", "SVM forward",
+                                             "SVM tree backward"]:
+                idx = selection_function(X, Y, num_fea)
+                X_after_selection = X[:, idx]
+            elif selection_function_name == "Alpha investing":
+                idx = selection_function(X, Y, 0.05, 0.05)
+                X_after_selection = X[:, idx]
+            elif selection_function_name in ["CIFE", "CMIM", "DISR", "FCBF", "ICAP", "JMI", "LCSI", "MIFS", "MIM",
+                                             "MRMR"]:
+                idx = selection_function(X, Y, n_selected_features=num_fea)
+                X_after_selection = X[:, idx[0:num_fea]]
+            else:
+                X_after_selection = select_features(selection_function, X, Y, num_fea)
         curr_attributes = X_after_selection.shape[1]
         end1 = time.time()
         print('Finished feature selection')
         curr_time_fs = end1 - start1
         cross_validation(X_after_selection, Y)
+    except:
+        write_to_csv([curr_feature_selection, curr_parameters, "Error", "", "", "",
+                      "", "", "", "", "", "", "",
+                      "", ""])
+
+
+def write_to_csv(row):
+    with open("output.csv", "a") as f:
+        writer = csv.writer(f, delimiter=';')
+        writer.writerow(row)
 
 
 def main():
     global results, sorted_classes, curr_feature_selection, max_attributes, curr_attributes
+    write_to_csv(csv_header)
     print('Started data prepocessing')
     # read data and drop illegal columns
     df = pd.read_csv(INPUT_FILE_NAME, delimiter=";", header=0)
@@ -228,12 +239,11 @@ def main():
 
     # FEATURE SELECTION
 
-    # STATISTICAL - RFE brakuje (scikit), t_score tylko dla binarnych
+    # STATISTICAL - RFE brakuje (scikit), t_score tylko dla binarnych, chi2 dla kategorycznych i nominalnych
 
     # select_and_predict("F score", X, Y, f_score.f_score)
     # select_and_predict("Low variance", X, Y, low_variance.low_variance_feature_selection)
     # select_and_predict("Gini index", X, Y, gini_index.gini_index)
-    # select_and_predict("Chi2", X, Y, chi_square.chi_square)
     # select_and_predict("Randomized Logistic Regression", X, Y)
     # select_and_predict("CFS", X, Y, CFS.cfs) - dluuugo
 
@@ -268,10 +278,6 @@ def main():
     # select_and_predict("SVM tree backward", X, Y, svm_backward.svm_backward)
 
     # STRUCTURE - group, tree, graph feature selections
-
-    with open("output.csv", "wb") as f:
-        writer = csv.writer(f, delimiter=';')
-        writer.writerows(results)
 
 
 if __name__ == '__main__':
